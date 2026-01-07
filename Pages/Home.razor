@@ -11,7 +11,8 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-8 mb-16">
     <MudText Typo="Typo.h3" GutterBottom="true" Align="Align.Center" Color="Color.Primary" Style="font-weight:bold;">Comfy Grimoire</MudText>
-    <MudText Typo="Typo.subtitle1" Align="Align.Center" Class="mb-8" Color="Color.Secondary">ComfyUI PNG Metadata Viewer</MudText>
+    <MudText Typo="Typo.subtitle1" Align="Align.Center" Class="mb-2" Color="Color.Secondary">ComfyUI PNG Metadata Viewer</MudText>
+    <MudText Typo="Typo.body1" Align="Align.Center" Class="mb-8">ComfyUIで生成された画像から、プロンプト・Seed・モデル名などの隠された情報を瞬時に「召喚（解析）」します。</MudText>
 
     <MudGrid Justify="Justify.Center">
         <!-- Drop Zone -->
@@ -30,6 +31,31 @@
                 </MudFileUpload>
 
             </MudPaper>
+            
+            <MudAlert Severity="Severity.Info" Class="mt-4" Icon="@Icons.Material.Filled.Lock">
+                <b>安心設計:</b> 画像はサーバーにアップロードされず、すべてあなたのブラウザ内で処理されます。プライベートな画像も安心してお使いください。
+            </MudAlert>
+
+            @if (!_generationInfo.HasData && !_isLoading)
+            {
+                <MudPaper Class="mt-6 pa-4 mud-background-gray" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-2" Color="Color.Primary">できることリスト</MudText>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudList T="string" Dense="true">
+                                <MudListItem Icon="@Icons.Material.Filled.AutoFixHigh">プロンプトとネガティブプロンプトの抽出</MudListItem>
+                                <MudListItem Icon="@Icons.Material.Filled.Casino">Seed値、Steps、CFGスケールの確認</MudListItem>
+                            </MudList>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                             <MudList T="string" Dense="true">
+                                <MudListItem Icon="@Icons.Material.Filled.Inventory2">使用モデル（Checkpoint）とLoRAの検出</MudListItem>
+                                <MudListItem Icon="@Icons.Material.Filled.ContentCopy">ワークフローJSONのコピー</MudListItem>
+                             </MudList>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            }
         </MudItem>
 
         @if (_isLoading)
