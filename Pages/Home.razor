@@ -1,7 +1,245 @@
 ﻿@page "/"
+@using ComfyGrimoire.Helpers
+@using ComfyGrimoire.Services
+@using System.Text.RegularExpressions
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject HistoryService HistoryService
+@implements IDisposable
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Comfy Grimoire - Image Metadata Viewer</PageTitle>
 
-<h1>Hello, world!</h1>
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8 mb-16">
+    <MudText Typo="Typo.h3" GutterBottom="true" Align="Align.Center" Color="Color.Primary" Style="font-weight:bold;">Comfy Grimoire</MudText>
+    <MudText Typo="Typo.subtitle1" Align="Align.Center" Class="mb-8" Color="Color.Secondary">ComfyUI PNG Metadata Viewer</MudText>
 
-Welcome to your new app.
+    <MudGrid Justify="Justify.Center">
+        <!-- Drop Zone -->
+        <MudItem xs="12" sm="10" md="8">
+            <MudPaper Class="pa-8 d-flex flex-column align-center justify-center border-dashed mud-border-primary" 
+                      Style="height: 200px; cursor: pointer; position: relative; background-color: var(--mud-palette-background-grey);"
+                      Elevation="0">
+                
+                <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles" Accept=".png" Class="flex-grow-1 w-100 h-100" Hidden="false" InputClass="absolute-full-size overflow-hidden z-20" InputStyle="opacity:0; width:100%; height:100%; cursor:pointer;">
+                    <ActivatorContent>
+                         <MudPaper Class="d-flex flex-column align-center justify-center w-100 h-100" Elevation="0" Style="background-color: transparent;">
+                             <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Style="font-size: 4rem;" Class="mb-4" Color="Color.Primary" />
+                             <MudText Typo="Typo.h6">画像をドロップまたはクリック</MudText>
+                         </MudPaper>
+                    </ActivatorContent>
+                </MudFileUpload>
+
+            </MudPaper>
+        </MudItem>
+
+        @if (_isLoading)
+        {
+            <MudItem xs="12" Class="d-flex justify-center mt-4">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </MudItem>
+        }
+
+        @if (_generationInfo.HasData)
+        {
+            <MudItem xs="12" sm="10" md="8" Class="mt-8">
+                <MudCard Elevation="3" Class="pa-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h5" Color="Color.Primary">Generation Parameters</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                           <div class="d-flex gap-2 flex-wrap justify-end align-center">
+                               @if(!string.IsNullOrEmpty(_generationInfo.RawWorkflowJson))
+                               {
+                                   <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => CopyToClipboard(_generationInfo.RawWorkflowJson))">Workflow JSON</MudButton>
+                               }
+                               
+                               @if(_generationInfo.Loras.Any())
+                               {
+                                   @foreach(var lora in _generationInfo.Loras)
+                                   {
+                                       <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">@lora</MudChip>
+                                   }
+                               }
+                           </div>
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="2">
+                            <!-- Model & Seed & Steps/CFG -->
+                            <MudItem xs="12" md="6">
+                                <div class="d-flex align-end gap-2">
+                                     <MudTextField Label="Checkpoint" Value="@_generationInfo.Checkpoint" ReadOnly="true" Variant="Variant.Filled" Margin="Margin.Dense" Class="flex-grow-1"/>
+                                     <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => CopyToClipboard(_generationInfo.Checkpoint))" />
+                                     <MudTooltip Text="Search on Civitai">
+                                         <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Href="@($"https://civitai.com/search/models?query={_generationInfo.Checkpoint}")" Target="_blank" Color="Color.Info" aria-label="Search on Civitai" />
+                                     </MudTooltip>
+                                </div>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <div class="d-flex align-end gap-2">
+                                    <MudTextField Label="Seed" Value="@_generationInfo.Seed.ToString()" ReadOnly="true" Variant="Variant.Filled" Margin="Margin.Dense" Class="flex-grow-1"/>
+                                    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => CopyToClipboard(_generationInfo.Seed.ToString()))" />
+                                </div>
+                            </MudItem>
+                             <MudItem xs="6" md="3">
+                                <MudTextField Label="Steps / CFG" Value="@($"{_generationInfo.Steps} / {_generationInfo.Cfg}")" ReadOnly="true" Variant="Variant.Filled" Margin="Margin.Dense" />
+                            </MudItem>
+
+                            <!-- Sampler & Scheduler -->
+                             <MudItem xs="6" md="6">
+                                <MudTextField Label="Sampler" Value="@_generationInfo.SamplerName" ReadOnly="true" Variant="Variant.Filled" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="6" md="6">
+                                <MudTextField Label="Scheduler" Value="@_generationInfo.Scheduler" ReadOnly="true" Variant="Variant.Filled" Margin="Margin.Dense" />
+                            </MudItem>
+
+                            <!-- Prompts with Highlight -->
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Color="Color.Default">Positive Prompt</MudText>
+                                <MudPaper Class="pa-3 mt-1 mud-theme-dark" Style="white-space: pre-wrap; word-break: break-all; min-height: 100px; max-height: 300px; overflow-y: auto;" Elevation="0" Outlined="true">
+                                    <div class="d-flex justify-space-between">
+                                        <div>@((MarkupString)HighlightPrompt(_generationInfo.PositivePrompt))</div>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => CopyToClipboard(_generationInfo.PositivePrompt))" Class="align-self-start ml-2"/>
+                                    </div>
+                                </MudPaper>
+                            </MudItem>
+                             <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Color="Color.Default">Negative Prompt</MudText>
+                                <MudPaper Class="pa-3 mt-1 mud-theme-dark" Style="white-space: pre-wrap; word-break: break-all; min-height: 50px; max-height: 200px; overflow-y: auto;" Elevation="0" Outlined="true">
+                                    <div class="d-flex justify-space-between">
+                                        <div>@((MarkupString)HighlightPrompt(_generationInfo.NegativePrompt))</div>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => CopyToClipboard(_generationInfo.NegativePrompt))" Class="align-self-start ml-2"/>
+                                    </div>
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+
+        @if (_metadata.Any())
+        {
+            <MudItem xs="12" sm="10" md="8" Class="mt-8">
+                <MudExpansionPanels>
+                    <MudExpansionPanel Text="詳細データ (Raw JSON)" Expanded="false">
+                        @foreach (var item in _metadata)
+                        {
+                           <MudTextField Label="@item.Key" Value="@item.Value" Lines="10" Variant="Variant.Outlined" ReadOnly="true" Class="mb-4" />
+                        }
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudItem>
+        }
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private Dictionary<string, string> _metadata = new();
+    private GenerationInfo _generationInfo = new();
+    private bool _isLoading = false;
+
+    protected override void OnInitialized()
+    {
+        HistoryService.OnItemSelected += OnHistorySelected;
+    }
+
+    public void Dispose()
+    {
+        HistoryService.OnItemSelected -= OnHistorySelected;
+    }
+
+    private void OnHistorySelected(HistoryItem item)
+    {
+        _metadata.Clear(); // 履歴からはメタデータ全体は復元できないが、表示にはGenerationInfoがあれば十分
+        _generationInfo = item.Info;
+        
+        // RawJsonがあればmetadataに入れておく（詳細表示用）
+        if(!string.IsNullOrEmpty(_generationInfo.RawPromptJson)) _metadata["prompt"] = _generationInfo.RawPromptJson;
+        if(!string.IsNullOrEmpty(_generationInfo.RawWorkflowJson)) _metadata["workflow"] = _generationInfo.RawWorkflowJson;
+
+        StateHasChanged();
+    }
+
+    private async Task UploadFiles(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        _isLoading = true;
+        _metadata.Clear();
+        _generationInfo = new GenerationInfo();
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            _metadata = PngMetadataHelper.ReadMetadata(memoryStream);
+
+            if (_metadata.ContainsKey("prompt"))
+            {
+                _generationInfo = ComfyMetadataParser.Parse(_metadata["prompt"]);
+                _generationInfo.RawPromptJson = _metadata["prompt"];
+            }
+            
+            if (_metadata.ContainsKey("workflow")) 
+            {
+                 _generationInfo.RawWorkflowJson = _metadata["workflow"];
+            }
+
+            if (!_metadata.Any())
+            {
+                Snackbar.Add("メタデータが見つかりませんでした。", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add("解析完了！", Severity.Success);
+                HistoryService.AddItem(_generationInfo, file.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"エラーが発生しました: {ex.Message}", Severity.Error);
+            Console.WriteLine(ex);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        if(string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            Snackbar.Add("コピーしました", Severity.Success);
+        }
+        catch
+        {
+             Snackbar.Add("コピーに失敗しました", Severity.Error);
+        }
+    }
+
+    private string HighlightPrompt(string prompt)
+    {
+        if (string.IsNullOrEmpty(prompt)) return string.Empty;
+
+        // Escape HTML first
+        var escaped = System.Net.WebUtility.HtmlEncode(prompt);
+
+        // Highlight custom syntax like (cat:1.2) or (text)
+        string pattern = @"(\((?:[^():]+)(?::[0-9.]+)?\))";
+        
+        // Use a Primary Color from default MudBlazor theme roughly
+        string replacement = "<span style=\"color: #594AE2; font-weight: bold;\">$1</span>";
+
+        return Regex.Replace(escaped, pattern, replacement);
+    }
+}

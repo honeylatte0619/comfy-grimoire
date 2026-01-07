@@ -1,20 +1,53 @@
 ﻿@inherits LayoutComponentBase
+@using ComfyGrimoire.Services
+@inject HistoryService HistoryService
 
-<MudThemeProvider />
+<MudThemeProvider @ref="@_mudThemeProvider" @bind-IsDarkMode="@_isDarkMode" Theme="_theme"/>
 <MudDialogProvider />
 <MudSnackbarProvider />
-<div class="page">
-    <div class="sidebar">
+
+<MudLayout>
+    <MudAppBar Elevation="0" Color="Color.Primary">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudSpacer />
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.Brightness7 : Icons.Material.Filled.Brightness4)" Color="Color.Inherit" OnClick="@((e) => DarkModeToggle())" />
+    </MudAppBar>
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="1">
         <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
+    </MudDrawer>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 pt-4">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+    bool _isDarkMode = true;
+    MudThemeProvider _mudThemeProvider;
+
+    private MudTheme _theme = new MudTheme()
+    {
+        PaletteDark = new PaletteDark()
+        {
+            Primary = Colors.DeepPurple.Default,
+            Secondary = Colors.DeepPurple.Lighten2,
+            AppbarBackground = Colors.DeepPurple.Darken4,
+             // 魔導書っぽい雰囲気のためのカスタマイズ
+             Background = "#1a1a1a",
+             Surface = "#1e1e24",
+             DrawerBackground = "#151515"
+        }
+    };
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    void DarkModeToggle()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+}
