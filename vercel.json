@@ -1,4 +1,6 @@
 {
-  "buildCommand": "dotnet publish -c Release -o release",
-  "outputDirectory": "release/wwwroot"
+  "buildCommand": "~/.dotnet/dotnet publish -c Release -o release",
+  "outputDirectory": "release/wwwroot",
+  "installCommand": "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel STS",
+  "framework": null
 }
