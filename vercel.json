@@ -1,0 +1,4 @@
+{
+  "buildCommand": "dotnet publish -c Release -o release",
+  "outputDirectory": "release/wwwroot"
+}
